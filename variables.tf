@@ -16,3 +16,69 @@ variable "db_ip_cidr_range" {
 
 variable "webapp_route_dest_range" {
 }
+
+variable "vpcs" {
+  default = {
+    vpc-network1 = {
+      name  = "vpc-network1"
+    },
+    vpc-network2 = {
+      name   = "vpc-network2"
+    },
+    vpc-network3 = {
+      name  = "vpc-network3"
+    }
+  }
+}
+
+variable "subnet" {
+  default = {
+    subnet1 = {
+      vpc = "vpc-network1"
+      name  = "webapp"
+      cidr = "10.1.0.0/24"
+    },
+    subnet2 = {
+      vpc = "vpc-network1"
+      name  = "db"
+      cidr = "10.2.0.0/24"
+    },
+    subnet3 = {
+      vpc = "vpc-network2"
+      name  = "webapp-2"
+      cidr = "10.3.0.0/24"
+    },
+    subnet4 = {
+      vpc = "vpc-network2"
+      name  = "db-2"
+      cidr = "10.4.0.0/24"
+    },
+    subnet5 = {
+      vpc = "vpc-network3"
+      name  = "webapp-3"
+      cidr = "10.5.0.0/24"
+    },
+    subnet6 = {
+      vpc = "vpc-network3"
+      name  = "db-3"
+      cidr = "10.6.0.0/24"
+    }
+  }
+}
+
+variable "webapp_route" {
+  default = {
+    webapp_route = {
+      name  = "webapp-route",
+      vpc = "vpc-network1"
+    },
+    webapp_route1 = {
+      name   = "webapp-route1",
+      vpc = "vpc-network2"
+    },
+    webapp_route2 = {
+      name  = "webapp-route2",
+      vpc = "vpc-network3"
+    }
+  }
+}

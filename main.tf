@@ -14,27 +14,24 @@ provider "google" {
 }
 
 resource "google_compute_network" "vpc_network" {
-  name                    = "vpc-network"
+  for_each                = var.vpcs
+  name                    = each.value.name
   auto_create_subnetworks = false
   routing_mode            = "REGIONAL"
+  delete_default_routes_on_create = true
 }
 
-resource "google_compute_subnetwork" "webapp" {
-  name          = "webapp"
-  network       = google_compute_network.vpc_network.name
-  ip_cidr_range = var.webapp_ip_cidr_range
-}
-
-resource "google_compute_subnetwork" "db" {
-  name          = "db"
-  network       = google_compute_network.vpc_network.name
-  ip_cidr_range = var.db_ip_cidr_range
+resource "google_compute_subnetwork" "subnet" {
+  for_each      = var.subnet
+  name          = each.value.name
+  network       = google_compute_network.vpc_network[each.value.vpc].name
+  ip_cidr_range = each.value.cidr
 }
 
 resource "google_compute_route" "webapp-route" {
-  name             = "webapp-route"
-  network          = google_compute_network.vpc_network.name
+  for_each         = var.webapp_route
+  name             = each.value.name
+  network          = google_compute_network.vpc_network[each.value.vpc].name
   dest_range       = var.webapp_route_dest_range
-  next_hop_gateway = "https://www.googleapis.com/compute/v1/projects/${var.project}/global/gateways/default-internet-gateway"  
-}
-
+  next_hop_gateway = "https://www.googleapis.com/compute/v1/projects/${var.project}/global/gateways/default-internet-gateway"
+} 
