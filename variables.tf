@@ -36,6 +36,81 @@ variable "machine_type" {
   default = "n1-standard-1"
 }
 
+variable "deny_port" {
+  default = 22
+}
+
+variable "app_tag" {
+  default = "webapp"
+}
+
+variable "gcga_name" {
+  default = "private-address"
+}
+
+variable "gcga_purpose" {
+  default = "VPC_PEERING"
+}
+
+variable "gcga_address_type" {
+  default = "INTERNAL"
+}
+
+variable "gcga_prefix_length" {
+  default = 16
+}
+
+variable "sql_instance_name" {
+  default = "webapp-cloudsql-instance"
+}
+
+variable "sql_version" {
+  default = "MYSQL_8_0"
+}
+
+variable "sql_instance_delete_protection" {
+  default = false
+}
+
+variable "db_instance_teir" {
+  default = "db-n1-standard-1"
+}
+
+variable "db_instance_disk_type" {
+  default = "pd-ssd"
+}
+
+variable "db_instance_disk_size" {
+  default = 100
+}
+
+variable "db_instance_availability_type" {
+  default = "REGIONAL"
+}
+
+variable "db_name" {
+  default = "webapp"
+}
+
+variable "db_username" {
+  default = "webapp"
+}
+
+variable "instance_network_tier" {
+  default = "PREMIUM"
+}
+
+variable "instance_size" {
+  default = 100
+}
+
+variable "instance_type" {
+  default = "pd-balanced"
+}
+
+variable "instance_family" {
+  default = "custom-family"
+}
 
 variable "webapp_port1" {
 }
