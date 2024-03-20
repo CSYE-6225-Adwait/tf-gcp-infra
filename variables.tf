@@ -33,7 +33,7 @@ variable "instance_name" {
 }
 
 variable "machine_type" {
-  default = "n1-standard-1"
+  default = "e2-medium"
 }
 
 variable "deny_port" {
@@ -111,6 +111,46 @@ variable "instance_type" {
 variable "instance_family" {
   default = "custom-family"
 }
+
+variable "service_account_id" {
+  default = "webapp-service-account"
+}
+
+variable "service_display_name" {
+  default = "Webapp Service Account"
+}
+
+variable "service_account_role1" {
+  default = "roles/logging.admin"
+}
+
+variable "service_account_role2" {
+  default = "roles/monitoring.metricWriter"
+}
+variable "service_account_scope1" {
+  default = "logging-write"
+}
+
+variable "service_account_scope2" {
+  default = "monitoring-write"
+}
+
+variable "zone_name" {
+  default = "zone-adwaitchangan"
+}
+
+variable "record_name" {
+  default = "adwaitchangan.me."
+}
+
+variable "record_type" {
+  default = "A"
+}
+
+variable "record_ttl" {
+  default = 300
+}
+
 
 variable "webapp_port1" {
 }
