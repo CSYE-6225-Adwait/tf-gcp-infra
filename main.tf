@@ -113,8 +113,7 @@ resource "google_sql_database" "webapp_database" {
 
 resource "random_password" "password" {
   length           = 16
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  special          = false
 }
 
 resource "google_sql_user" "webapp_user" {
@@ -124,6 +123,26 @@ resource "google_sql_user" "webapp_user" {
 
 }
 
+resource "google_service_account" "service_account" {
+  account_id   = var.service_account_id
+  display_name = var.service_display_name
+}
+
+resource "google_project_iam_binding" "service_account_logging_admin" {
+  project = var.project
+  role    = var.service_account_role1
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}",
+  ]
+}
+
+resource "google_project_iam_binding" "service_account_monitoring_writer" {
+  project = var.project
+  role    = var.service_account_role2
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}",
+  ]
+}
 
 resource "google_compute_instance" "webapp-instance" {
   name         = var.instance_name
@@ -145,6 +164,17 @@ resource "google_compute_instance" "webapp-instance" {
       image = var.instance_family
     }
   }
+  service_account {
+    email  = google_service_account.service_account.email
+    scopes = [var.service_account_scope1,var.service_account_scope2]
+  }
+
+  depends_on = [
+    google_service_account.service_account,
+    google_project_iam_binding.service_account_logging_admin,
+    google_project_iam_binding.service_account_monitoring_writer,
+  ]
+  
   metadata_startup_script = <<SCRIPT
       #!/bin/bash
       sudo touch /opt/app/.env
@@ -156,3 +186,17 @@ resource "google_compute_instance" "webapp-instance" {
 
 }
 
+data "google_dns_managed_zone" "zone" {
+  name = var.zone_name
+}
+ 
+resource "google_dns_record_set" "a_record" {
+  name         = var.record_name
+  type         = var.record_type
+  ttl          = var.record_ttl
+  managed_zone = data.google_dns_managed_zone.zone.name
+ 
+  rrdatas = [
+    google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip
+  ]
+}
