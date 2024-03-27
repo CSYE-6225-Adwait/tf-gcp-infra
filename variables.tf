@@ -10,7 +10,10 @@ variable "zone" {
 
 variable "webapp_ip_cidr_range" {
 }
-
+variable "envrun" {
+  default = "PRODUCTION"
+  
+}
 variable "db_ip_cidr_range" {
 }
 
@@ -127,12 +130,25 @@ variable "service_account_role1" {
 variable "service_account_role2" {
   default = "roles/monitoring.metricWriter"
 }
+
+variable "service_account_role3" {
+  default = "roles/pubsub.publisher"
+}
+
 variable "service_account_scope1" {
   default = "logging-write"
 }
 
 variable "service_account_scope2" {
   default = "monitoring-write"
+}
+
+variable "service_account_scope3" {
+  default = "cloud-platform"
+}
+
+variable "service_account_scope4" {
+  default = "pubsub"
 }
 
 variable "zone_name" {
@@ -151,6 +167,74 @@ variable "record_ttl" {
   default = 300
 }
 
+variable "vpc_connector_name" {
+  default = "cf-vpc-connector"
+}
+
+variable "vpc_connector_range" {
+  default = "10.8.0.0/28"
+}
+
+variable "topic_name" {
+  default = "verify_email"
+}
+
+variable "service_ps_name" {
+  default = "service-account-pubsub"
+}
+
+variable "service_ps_display" {
+  default = "service-account-pubsub"
+}
+
+variable "cf_name" {
+  default = "verify_email"
+}
+
+variable "cf_desc" {
+  default = "My Cloud Function"
+}
+
+variable "cf_runtime" {
+  default = "nodejs20"
+}
+
+variable "cf_entry_pt" {
+  default = "helloPubSub"
+}
+
+
+variable "cf_bucket" {
+  default = "csye6225-cloud-function-bucket"
+}
+
+variable "cf_bucket_file" {
+  default = "serverless.zip"
+}
+
+variable "cf_mailgun_key" {
+  default = "30b334475448b8389ba1f58b6890ea4f-f68a26c9-7c751faa"
+}
+
+variable "cf_memory" {
+  default = "256M"
+}
+
+variable "cf_ttl" {
+  default = 60
+}
+
+variable "cf_cpu" {
+  default = 1
+}
+
+variable "cf_event" {
+  default = "google.cloud.pubsub.topic.v1.messagePublished"
+}
+
+variable "cf_policy" {
+  default = "RETRY_POLICY_RETRY"
+}
 
 variable "webapp_port1" {
 }
