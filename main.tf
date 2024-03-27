@@ -54,7 +54,7 @@ resource "google_compute_firewall" "webapp-firewall" {
 resource "google_compute_firewall" "webapp-firewall-deny" {
   name    = var.firewall_name2
   network = google_compute_network.vpc_network["vpc-network1"].name
-  deny {
+  allow {
     protocol = "tcp"
     ports    = [var.deny_port]
   }
@@ -136,6 +136,14 @@ resource "google_project_iam_binding" "service_account_logging_admin" {
   ]
 }
 
+resource "google_project_iam_binding" "service_account_pub" {
+  project = var.project
+  role    = var.service_account_role3
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}",
+  ]
+}
+
 resource "google_project_iam_binding" "service_account_monitoring_writer" {
   project = var.project
   role    = var.service_account_role2
@@ -166,13 +174,14 @@ resource "google_compute_instance" "webapp-instance" {
   }
   service_account {
     email  = google_service_account.service_account.email
-    scopes = [var.service_account_scope1,var.service_account_scope2]
+    scopes = [var.service_account_scope1,var.service_account_scope2,var.service_account_scope3,var.service_account_scope4]
   }
 
   depends_on = [
     google_service_account.service_account,
     google_project_iam_binding.service_account_logging_admin,
     google_project_iam_binding.service_account_monitoring_writer,
+    google_project_iam_binding.service_account_pub
   ]
   
   metadata_startup_script = <<SCRIPT
@@ -182,6 +191,7 @@ resource "google_compute_instance" "webapp-instance" {
       echo "DATABASEURL=${google_sql_database_instance.cloudsql_instance.first_ip_address}" >> /opt/app/.env
       echo "DATABASEPASSWORD=${random_password.password.result}" >> /opt/app/.env
       echo "DATABASENAME=${var.db_name}" >> /opt/app/.env
+      echo "ENVRUN=${var.envrun}" >> /opt/app/.env
       SCRIPT
 
 }
@@ -198,5 +208,106 @@ resource "google_dns_record_set" "a_record" {
  
   rrdatas = [
     google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip
+  ]
+}
+
+resource "google_vpc_access_connector" "connector" {
+  name          = var.vpc_connector_name
+  ip_cidr_range = var.vpc_connector_range
+  network       = google_compute_network.vpc_network["vpc-network1"].name
+}
+
+resource "google_pubsub_topic" "verify_email" {
+  name = var.topic_name
+}
+
+resource "google_service_account" "pubsub_service_account" {
+  account_id   = var.service_ps_name
+  display_name = var.service_ps_display
+  depends_on = [ google_pubsub_topic.verify_email ]
+
+}
+resource "google_project_iam_binding" "pubsub-publisher" {
+  project = var.project
+  role    = "roles/run.invoker"
+  members = ["serviceAccount:${google_service_account.pubsub_service_account.email}"]
+}
+
+resource "google_project_iam_binding" "cloud-function-invoker" {
+  project = var.project
+  role    = "roles/cloudfunctions.invoker"
+  members = ["serviceAccount:${google_service_account.pubsub_service_account.email}"]
+}
+
+resource "google_project_iam_binding" "cloud-function-mysqlclient" {
+  project = var.project
+  role    = "roles/cloudsql.client"
+  members = ["serviceAccount:${google_service_account.pubsub_service_account.email}"]
+}
+
+resource "google_project_iam_binding" "cloud-function-sub" {
+  project = var.project
+  role    = "roles/pubsub.subscriber"
+  members = ["serviceAccount:${google_service_account.pubsub_service_account.email}"]
+}
+resource "google_project_iam_binding" "cf_service_account_vpc_connector" {
+  project = var.project
+  role    = "roles/vpcaccess.user"
+  members = ["serviceAccount:${google_service_account.pubsub_service_account.email}"]
+}
+
+resource "google_cloudfunctions2_function" "verify_email" {
+  name         = var.cf_name
+  description  = var.cf_desc
+  location    = var.region
+   build_config {
+    runtime     = var.cf_runtime
+    entry_point = var.cf_entry_pt
+    source {
+      storage_source {
+        bucket = var.cf_bucket
+        object = var.cf_bucket_file
+      }
+    }
+  }
+
+  service_config {
+    max_instance_count    = 1
+    min_instance_count    = 1
+    available_cpu         = var.cf_cpu
+    available_memory      = var.cf_memory
+    timeout_seconds       = var.cf_ttl
+    service_account_email = google_service_account.pubsub_service_account.email
+    vpc_connector         = google_vpc_access_connector.connector.self_link
+
+    environment_variables = {
+    MAILGUN_API_KEY = var.cf_mailgun_key
+    MYSQL_HOST      = google_sql_database_instance.cloudsql_instance.first_ip_address
+    MYSQL_USER      = google_sql_user.webapp_user.name
+    MYSQL_PASSWORD  = random_password.password.result
+    MYSQL_DATABASE  = var.db_name
+  }
+
+  }
+
+  
+event_trigger {
+    event_type            = var.cf_event
+    pubsub_topic          = google_pubsub_topic.verify_email.id
+    retry_policy          = var.cf_policy
+    trigger_region        = var.region
+    service_account_email = google_service_account.pubsub_service_account.email
+  }
+
+  depends_on = [
+    google_sql_database_instance.cloudsql_instance,
+    google_pubsub_topic.verify_email,
+    google_vpc_access_connector.connector,
+    google_project_iam_binding.cf_service_account_vpc_connector,
+    google_project_iam_binding.cloud-function-invoker,
+    google_project_iam_binding.pubsub-publisher,
+    google_pubsub_topic.verify_email,
+    google_project_iam_binding.cloud-function-invoker,
+    google_project_iam_binding.service_account_pub
   ]
 }
