@@ -2,7 +2,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "4.51.0"
+      version = "5.23.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -48,7 +48,7 @@ resource "google_compute_firewall" "webapp-firewall" {
     ports    = [var.webapp_port1, var.webapp_port2]
   }
   target_tags   = [var.app_tag]
-  source_ranges = [var.source_ranges]
+  source_ranges = [var.source_ranges,var.source_ranges1,var.source_ranges2]
 }
 
 resource "google_compute_firewall" "webapp-firewall-deny" {
@@ -104,8 +104,6 @@ resource "google_sql_database_instance" "cloudsql_instance" {
   depends_on = [google_service_networking_connection.private_connection]
 }
 
-# CloudSQL Database
-
 resource "google_sql_database" "webapp_database" {
   name     = var.db_name
   instance = google_sql_database_instance.cloudsql_instance.name
@@ -152,10 +150,10 @@ resource "google_project_iam_binding" "service_account_monitoring_writer" {
   ]
 }
 
-resource "google_compute_instance" "webapp-instance" {
+resource "google_compute_region_instance_template" "webapp-instance" {
   name         = var.instance_name
   machine_type = var.machine_type
-  zone         = var.zone
+  region         = var.region
   tags         = [var.app_tag]
   network_interface {
     subnetwork = google_compute_subnetwork.subnet["subnet1"].name
@@ -164,13 +162,18 @@ resource "google_compute_instance" "webapp-instance" {
       network_tier = var.instance_network_tier
     }
   }
-  boot_disk {
+  disk {
     auto_delete = true
-    initialize_params {
-      size  = var.instance_size
-      type  = var.instance_type
-      image = var.instance_family
-    }
+    disk_size_gb  = var.instance_size
+    disk_type  = var.instance_type
+    source_image = var.instance_family
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+  scheduling {
+    automatic_restart   = true
+    on_host_maintenance = var.on_host_maintenance_instance
   }
   service_account {
     email  = google_service_account.service_account.email
@@ -198,17 +201,6 @@ resource "google_compute_instance" "webapp-instance" {
 
 data "google_dns_managed_zone" "zone" {
   name = var.zone_name
-}
- 
-resource "google_dns_record_set" "a_record" {
-  name         = var.record_name
-  type         = var.record_type
-  ttl          = var.record_ttl
-  managed_zone = data.google_dns_managed_zone.zone.name
- 
-  rrdatas = [
-    google_compute_instance.webapp-instance.network_interface[0].access_config[0].nat_ip
-  ]
 }
 
 resource "google_vpc_access_connector" "connector" {
@@ -281,7 +273,7 @@ resource "google_cloudfunctions2_function" "verify_email" {
     vpc_connector         = google_vpc_access_connector.connector.self_link
 
     environment_variables = {
-    MAILGUN_API_KEY = var.cf_mailgun_key
+    MAILGUNKEY = var.mailgunkey
     MYSQL_HOST      = google_sql_database_instance.cloudsql_instance.first_ip_address
     MYSQL_USER      = google_sql_user.webapp_user.name
     MYSQL_PASSWORD  = random_password.password.result
@@ -309,5 +301,94 @@ event_trigger {
     google_pubsub_topic.verify_email,
     google_project_iam_binding.cloud-function-invoker,
     google_project_iam_binding.service_account_pub
+  ]
+}
+
+resource "google_compute_region_health_check" "compute_health_check" {
+  name               = var.compute-health-check-name
+  check_interval_sec = var.check_interval_sec_health_check
+  timeout_sec        = var.timeout_sec_health_check
+  healthy_threshold   = var.healthy_threshold_health_check
+  unhealthy_threshold = var.unhealthy_threshold_health_check
+  https_health_check {
+    port   = var.https_health_check_port
+    request_path = var.https_health_check_request_path
+  }
+}
+
+resource "google_compute_region_instance_group_manager" "webapp_instance_region_group_manager" {
+  name = var.webapp_instance_region_group_manager_name
+  base_instance_name = var.base-instance-name
+  region = var.region
+  version {
+    instance_template = google_compute_region_instance_template.webapp-instance.self_link
+  }
+  auto_healing_policies {
+    health_check = google_compute_region_health_check.compute_health_check.self_link
+    initial_delay_sec = 300
+  }
+  named_port{
+    name= var.named_port_name
+    port = var.named_port_port
+  }
+}
+
+resource "google_compute_region_autoscaler" "webapp_region_autoscaler" {
+  name               = var.webapp_region_autoscaler_name
+  target             = google_compute_region_instance_group_manager.webapp_instance_region_group_manager.self_link
+  autoscaling_policy {
+    max_replicas       = var.autoscaling_policy_max_replicas
+    min_replicas       = var.autoscaling_policy_min_replicas
+    cooldown_period = var.autoscaling_policy_cooldown_period
+    cpu_utilization {
+      target = var.cpu_utilization_target
+    }
+  }
+}
+module "gce-lb-http" {
+  source  = "terraform-google-modules/lb-http/google"
+  version = "~> 10.0"
+  project       = var.project
+  name          = "group-http-lb"
+  target_tags   = ["webapp"]  
+  ssl = true
+  managed_ssl_certificate_domains = ["adwaitchangan.me"]
+  http_forward = false
+  create_address = true
+  network = google_compute_network.vpc_network["vpc-network1"].self_link
+  backends = {
+    default = {
+      port_name    = "http"  
+      protocol     = "HTTP"
+      timeout_sec  = 10
+      enable_cdn = false
+      health_check = {
+        request_path = "/healthz"
+        port         = 3000  
+      }
+      log_config = {
+        enable      = true
+        sample_rate = 1.0
+      }
+      groups = [
+        {
+          group = google_compute_region_instance_group_manager.webapp_instance_region_group_manager.instance_group 
+        },
+      ]
+      iap_config = {
+        enable = false
+      }
+    }
+  }
+}
+
+resource "google_dns_record_set" "a_record" {
+  name         = var.record_name
+  type         = var.record_type
+  ttl          = var.record_ttl
+  managed_zone = data.google_dns_managed_zone.zone.name
+ 
+  rrdatas = [
+    module.gce-lb-http.external_ip
   ]
 }
