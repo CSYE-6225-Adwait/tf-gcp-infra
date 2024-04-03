@@ -212,7 +212,7 @@ variable "cf_bucket_file" {
   default = "serverless.zip"
 }
 
-variable "cf_mailgun_key" {
+variable "mailgunkey" {
   default = "30b334475448b8389ba1f58b6890ea4f-f68a26c9-7c751faa"
 }
 
@@ -309,4 +309,96 @@ variable "webapp_route" {
       vpc  = "vpc-network3"
     }
   }
+}
+
+variable "on_host_maintenance_instance" {
+  default = "MIGRATE"
+}
+
+variable "compute-health-check-name" {
+  default = "compute-health-check"
+}
+
+variable "check_interval_sec_health_check" {
+  default = 5
+}
+
+variable "timeout_sec_health_check" {
+  default = 5
+}
+
+variable "healthy_threshold_health_check" {
+  default = 2
+}
+
+variable "unhealthy_threshold_health_check" {
+  default = 10
+}
+
+variable "https_health_check_port" {
+  default = 3000
+}
+
+variable "https_health_check_request_path" {
+  default = "/healthz"
+}
+
+variable "webapp_instance_region_group_manager_name" {
+  default = "webapp-instance-region-group-manager"
+}
+
+variable "base-instance-name" {
+  default = "webapp-instance"
+}
+
+variable "named_port_name" {
+  default = "http"
+}
+
+variable "named_port_port" {
+  default = 3000
+}
+
+variable "webapp_region_autoscaler_name" {
+  default = "webapp-region-autoscaler"
+}
+
+variable "autoscaling_policy_max_replicas" {
+  default = 6
+}
+
+variable "autoscaling_policy_min_replicas" {
+  default = 3
+}
+
+variable "autoscaling_policy_cooldown_period" {
+  default = 60
+}
+
+variable "cpu_utilization_target" {
+  default = 0.05
+}
+
+variable "source_ranges1" {
+  default = "130.211.0.0/22"
+}
+
+variable "source_ranges2" {
+  default = "35.191.0.0/16"
+}
+
+variable "module_source" {
+  default = "terraform-google-modules/lb-http/google"
+}
+
+variable "module_name" {
+  default = "group-http-lb"
+}
+
+variable "target_tags" {
+  default = "webapp"
+}
+
+variable "ssl_domain" {
+  default = "adwaitchangan.me"
 }
