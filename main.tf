@@ -17,6 +17,122 @@ provider "google" {
   zone    = var.zone
 }
 
+
+resource "random_id" "keyring_suffix" {
+  byte_length = 4
+}
+
+resource "google_kms_key_ring" "keyring" {
+  name     = "kms-keyring-${random_id.keyring_suffix.hex}"
+  location = var.region
+}
+
+resource "google_kms_crypto_key" "vm-key" {
+  name            = var.vm_key
+  key_ring        = google_kms_key_ring.keyring.id
+  rotation_period = var.key_rotation_period
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+
+
+resource "google_kms_crypto_key" "cloudsql-key" {
+  name            = var.cloudsql_key
+  key_ring        = google_kms_key_ring.keyring.id
+  rotation_period = var.key_rotation_period
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_kms_crypto_key" "storage-key" {
+  name            = var.storage_key
+  key_ring        = google_kms_key_ring.keyring.id
+  rotation_period = var.key_rotation_period
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_kms_crypto_key" "object-key" {
+  name            = var.object_key
+  key_ring        = google_kms_key_ring.keyring.id
+  rotation_period = var.key_rotation_period
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_service_account" "cloudsql_service_account" {
+  account_id   = var.cloudsql_service_account_id
+  display_name = var.cloudsql_service_account_name
+}
+
+resource "google_service_account" "key_ring_service_account" {
+  account_id   = var.key_ring_service_account_id
+  display_name = var.key_ring_service_account_name
+}
+
+resource "google_kms_key_ring_iam_binding" "key_ring_iam" {
+  key_ring_id = google_kms_key_ring.keyring.id
+  role        = var.key_ring_iam_role
+  members     = ["serviceAccount:${google_service_account.key_ring_service_account.email}"]
+}
+
+
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  project  = var.project
+  provider = google-beta
+  service  = var.gcp_sa_cloud_sql_service
+}
+ 
+resource "google_kms_crypto_key_iam_binding" "crypto_key_sql" {
+  provider      = google-beta
+  crypto_key_id = google_kms_crypto_key.cloudsql-key.id
+  role          = var.sa_key_role
+ 
+  members = [
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+  ]
+}
+
+data "google_storage_project_service_account" "storage_service_account" {
+}
+
+resource "google_kms_crypto_key_iam_binding" "storage_key_iam" {
+  crypto_key_id = google_kms_crypto_key.storage-key.id
+  role          = var.sa_key_role
+  members       = ["serviceAccount:${data.google_storage_project_service_account.storage_service_account.email_address}"]
+}
+
+resource "google_kms_crypto_key_iam_binding" "object_key_iam" {
+  crypto_key_id = google_kms_crypto_key.object-key.id
+  role          = var.sa_key_role
+  members       = ["serviceAccount:${data.google_storage_project_service_account.storage_service_account.email_address}"]
+}
+
+resource "google_storage_bucket" "storage_bucket_serverless" {
+  name                        = var.bucket_name
+  location                    = var.region
+  storage_class               = var.storage_class_bucket
+  force_destroy               = true
+  uniform_bucket_level_access = true
+  encryption {
+    default_kms_key_name = google_kms_crypto_key.storage-key.id
+  }
+  depends_on = [google_kms_crypto_key_iam_binding.storage_key_iam]
+}
+ 
+resource "google_storage_bucket_object" "storage_bucket_object" {
+  name         = var.storage_bucket_object_name
+  bucket       = google_storage_bucket.storage_bucket_serverless.name
+  source       = var.storage_bucket_object_source
+  kms_key_name = google_kms_crypto_key.object-key.id
+  depends_on = [ google_storage_bucket.storage_bucket_serverless ]
+}
+
 resource "google_compute_network" "vpc_network" {
   for_each                        = var.vpcs
   name                            = each.value.name
@@ -48,7 +164,7 @@ resource "google_compute_firewall" "webapp-firewall" {
     ports    = [var.webapp_port1, var.webapp_port2]
   }
   target_tags   = [var.app_tag]
-  source_ranges = [var.source_ranges,var.source_ranges1,var.source_ranges2]
+  source_ranges = [var.source_ranges1,var.source_ranges2]
 }
 
 resource "google_compute_firewall" "webapp-firewall-deny" {
@@ -101,6 +217,7 @@ resource "google_sql_database_instance" "cloudsql_instance" {
     }
     availability_type = var.db_instance_availability_type
   }
+  encryption_key_name = google_kms_crypto_key.cloudsql-key.id
   depends_on = [google_service_networking_connection.private_connection]
 }
 
@@ -126,12 +243,27 @@ resource "google_service_account" "service_account" {
   display_name = var.service_display_name
 }
 
+resource "google_kms_crypto_key_iam_binding" "vm_key_iam" {
+  crypto_key_id = google_kms_crypto_key.vm-key.id
+  role          = var.sa_key_role
+  members       = ["serviceAccount:${var.s_account}"]
+}
+
 resource "google_project_iam_binding" "service_account_logging_admin" {
   project = var.project
   role    = var.service_account_role1
   members = [
     "serviceAccount:${google_service_account.service_account.email}",
   ]
+}
+
+resource "google_pubsub_topic_iam_binding" "binding" {
+  project = var.project
+  topic   = "verify_email"
+  role    = "roles/pubsub.publisher"
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}",
+    ]
 }
 
 resource "google_project_iam_binding" "service_account_pub" {
@@ -167,6 +299,10 @@ resource "google_compute_region_instance_template" "webapp-instance" {
     disk_size_gb  = var.instance_size
     disk_type  = var.instance_type
     source_image = var.instance_family
+    disk_encryption_key {
+    kms_key_self_link = google_kms_crypto_key.vm-key.id
+  }
+
   }
   lifecycle {
     create_before_destroy = true
@@ -179,7 +315,7 @@ resource "google_compute_region_instance_template" "webapp-instance" {
     email  = google_service_account.service_account.email
     scopes = [var.service_account_scope1,var.service_account_scope2,var.service_account_scope3,var.service_account_scope4]
   }
-
+  
   depends_on = [
     google_service_account.service_account,
     google_project_iam_binding.service_account_logging_admin,
@@ -300,7 +436,8 @@ event_trigger {
     google_project_iam_binding.pubsub-publisher,
     google_pubsub_topic.verify_email,
     google_project_iam_binding.cloud-function-invoker,
-    google_project_iam_binding.service_account_pub
+    google_project_iam_binding.service_account_pub,
+    google_storage_bucket.storage_bucket_serverless
   ]
 }
 
@@ -310,7 +447,7 @@ resource "google_compute_region_health_check" "compute_health_check" {
   timeout_sec        = var.timeout_sec_health_check
   healthy_threshold   = var.healthy_threshold_health_check
   unhealthy_threshold = var.unhealthy_threshold_health_check
-  https_health_check {
+  http_health_check {
     port   = var.https_health_check_port
     request_path = var.https_health_check_request_path
   }
