@@ -47,6 +47,10 @@ variable "app_tag" {
   default = "webapp"
 }
 
+variable "s_account" {
+  default = "service-143684562246@compute-system.iam.gserviceaccount.com"
+}
+
 variable "gcga_name" {
   default = "private-address"
 }
@@ -104,7 +108,7 @@ variable "instance_network_tier" {
 }
 
 variable "instance_size" {
-  default = 100
+  default = 20
 }
 
 variable "instance_type" {
@@ -209,7 +213,7 @@ variable "cf_bucket" {
 }
 
 variable "cf_bucket_file" {
-  default = "serverless.zip"
+  default = "serverless"
 }
 
 variable "mailgunkey" {
@@ -401,4 +405,68 @@ variable "target_tags" {
 
 variable "ssl_domain" {
   default = "adwaitchangan.me"
+}
+
+variable "sa_key_role" {
+  default = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+}
+
+variable "vm_key" {
+  default = "vm-key"
+}
+
+variable "key_rotation_period" {
+  default = "2592000s"
+}
+
+variable "cloudsql_key" {
+  default = "cloudsql-key"
+}
+
+variable "storage_key" {
+  default = "storage-key"
+}
+
+variable "object_key" {
+  default = "object-key"
+}
+
+variable "cloudsql_service_account_id" {
+  default = "cloudsql-service-account"
+}
+
+variable "cloudsql_service_account_name" {
+  default = "cloudsql_service_account"
+}
+
+variable "key_ring_service_account_id" {
+  default = "key-ring-service-account"
+}
+
+variable "key_ring_service_account_name" {
+  default = "key-ring-service-account"
+}
+
+variable "key_ring_iam_role" {
+  default = "roles/cloudkms.admin"
+}
+
+variable "gcp_sa_cloud_sql_service" {
+  default = "sqladmin.googleapis.com"
+}
+
+variable "bucket_name" {
+  default = "csye6225-cloud-function-bucket"
+}
+
+variable "storage_class_bucket" {
+  default = "STANDARD"
+}
+
+variable "storage_bucket_object_name" {
+  default = "serverless"
+}
+
+variable "storage_bucket_object_source" {
+  default = "./serverless.zip"
 }
